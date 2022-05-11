@@ -21,7 +21,7 @@ PLUGIN_LIBRARY = r"plugins/human_yolov5/jetson_TX2/libmyplugins.so"
 ENGINE_FILE_PATH = r"plugins/human_yolov5/jetson_TX2/human_yolov5s_v5.engine"
 ctypes.CDLL(PLUGIN_LIBRARY)
 
-################################### path to a model of traking and initialize a tracker
+# path to a model of traking and initialize a tracker
 NN_BUDGET = None
 MAX_COSINE_DISTANCE = 0.3
 TRACKING_MODEL = r"models/deep_sort/mars-small128.pb"
