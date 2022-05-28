@@ -1,14 +1,15 @@
 import os
+import sys
 import numpy as np
-
-from utils.efficient_pose import helpers
-
-from tensorflow.python.platform.gfile import FastGFile
-from tensorflow.compat.v1 import GraphDef
-from tensorflow.compat.v1.keras.backend import get_session
-from tensorflow import import_graph_def
-
 import time
+import torch
+import cv2
+import torch.backends.cudnn as cudnn
+
+import helpers
+from torch import from_numpy, autograd
+from imp import load_source
+from torch import load, quantization, backends
 
 RESOLUTIONS_DICT = {'rt': 224, 'i': 256, 'ii': 368, 'iii': 480, 'iv': 600, 'rt_lite': 224, 'i_lite': 256,
                     'ii_lite': 368}
@@ -24,43 +25,52 @@ class EfficientPose:
                                        'efficientposeiii', 'iii', 'efficientposeiv', 'iv', 'efficientposert_lite',
                                        'rt_lite', 'efficientposei_lite', 'i_lite', 'efficientposeii_lite', 'ii_lite'])
         self.model_variant = self.model_variant[13:] if len(self.model_variant) > 7 else self.model_variant
-        self.resolution = RESOLUTIONS_DICT[self.model_variant]
         self.lite = True if self.model_variant.endswith('_lite') else False
-        # load model
-        f = FastGFile(os.path.join('models', 'efficient_pose', 'tensorflow',
-                                   'EfficientPose{0}.pb'.format(self.model_variant.upper())), 'rb')
-        graph_def = GraphDef()
-        graph_def.ParseFromString(f.read())
-        f.close()
-        self.model = get_session()
-        self.model.graph.as_default()
-        import_graph_def(graph_def)
+        self.resolution = RESOLUTIONS_DICT[self.model_variant]
+        # Load model
+        MainModel = load_source('MainModel', os.path.join('models', 'efficient_pose', 'pytorch',
+                                                          'EfficientPose{0}.py'.format(self.model_variant.upper())))
+        self.model = load(os.path.join('/content/Turnstiles_Fare_Evasion_Python/models/efficient_pose/pytorch',
+                                       'EfficientPose{0}'.format(self.model_variant.upper())))
+        self.model.eval()
+        qconfig = quantization.get_default_qconfig('qnnpack')
+        backends.quantized.engine = 'qnnpack'
 
+    # Inference Pose Estimation
     def infer(self, batch):
         """
-      Perform inference on supplied image batch.
-      Args:
-         batch: ndarray
-            Stack of preprocessed images
-      Returns:
-         EfficientPose model outputs for the supplied batch.
-      """
-        output_tensor = self.model.graph.get_tensor_by_name('upscaled_confs/BiasAdd:0')
-        if self.lite:
-            batch_outputs = self.model.run(output_tensor, {'input_1_0:0': batch})
-        else:
-            batch_outputs = self.model.run(output_tensor, {'input_res1:0': batch})
+        Perform inference on supplied image batch.
+        Args:
+           batch: ndarray
+              Stack of preprocessed images
+        Returns:
+           EfficientPose model outputs for the supplied batch.
+        """
+        batch = np.rollaxis(batch, 3, 1)
+        batch = from_numpy(batch)
+        batch = autograd.Variable(batch, requires_grad=False).float()
+        batch_outputs = self.model(batch)
+        batch_outputs = batch_outputs.detach().numpy()
+        batch_outputs = np.rollaxis(batch_outputs, 1, 4)
         return batch_outputs
 
     def analyzeOneImage(self, image):
         """
-      Predict pose coordinates on supplied image.
-      Args:
-         image: ndarray
-            The image to analyze
-      Returns:
-         Predicted pose coordinates in the supplied image.
-      """
+        Live prediction of pose coordinates from camera.
+
+        Args:
+          model: deep learning model
+              Initialized EfficientPose model to utilize (RT, I, II, III, IV, RT_Lite, I_Lite or II_Lite)
+          framework: string
+              Deep learning framework to use (Keras, TensorFlow, TensorFlow Lite or PyTorch)
+          resolution: int
+              Input height and width of model to utilize
+          lite: boolean
+              Defines if EfficientPose Lite model is used
+
+        Returns:
+          Predicted pose coordinates in all frames of camera session.
+        """
         start_time = time.time()
         image_height, image_width = image.shape[:2]
         batch = np.expand_dims(image, axis=0)  # mini-batch = 1
@@ -68,8 +78,7 @@ class EfficientPose:
         batch = helpers.preprocess(batch, self.resolution, self.lite)
         # Perform inference
         batch_outputs = self.infer(batch)
-        print("batch_outputs: ")
-        print(batch_outputs.shape)
+
         # Extract coordinates
         coordinates = helpers.extract_coordinates(batch_outputs[0, ...], image_height, image_width)
         # Print processing time
@@ -81,14 +90,6 @@ class EfficientPose:
         return coordinates
 
     def saveBinImage2Folder(self, file_name, coordinates, image_height, image_width):
-        """
-      Annotates supplied image from predicted coordinates.
-      Args:
-         file_name: string
-            The path to folder to store binary image
-         coordinates: list
-            Predicted body part coordinates for image, image's height, image's with
-      """
         # Load raw image
         from PIL import Image, ImageDraw
         image_side = image_width if image_width >= image_height else image_height
@@ -102,17 +103,17 @@ class EfficientPose:
 
     def performPoseEstimation(self, image, file_name, stored=True):
         """
-      Process of estimating poses frome image.
-      Args:
-         image: ndarray
-            The image to analyze
-         file_name: string
-            The file's name to store binary image
-         stored: boolean
-            Flag to store visualization of predicted poses
-      Returns:
-         Boolean expressing if tracking was successfully performed.
-      """
+        Process of estimating poses frome image.
+        Args:
+           image: ndarray
+              The image to analyze
+           file_name: string
+              The file's name to store binary image
+           stored: boolean
+              Flag to store visualization of predicted poses
+        Returns:
+           Boolean expressing if tracking was successfully performed.
+        """
         # perform inference
         coordinates = self.analyzeOneImage(image)
 
@@ -125,17 +126,17 @@ class EfficientPose:
 
     def estimatePose(self, image, file_name, stored=True):
         """
-      Estimate of the human pose from image (contains only a persion)
-      Args:
-         image: ndarray
-            The image to analyze
-         file_name: string
-            The file's name to store binary image
-         stored: boolean
-            Flag to store visualization of predicted poses
-      Returns:
-         String expressing the human pose in the image
-      """
+        Estimate of the human pose from image (contains only a persion)
+        Args:
+           image: ndarray
+              The image to analyze
+           file_name: string
+              The file's name to store binary image
+           stored: boolean
+              Flag to store visualization of predicted poses
+        Returns:
+           String expressing the human pose in the image
+        """
         # perform inference
         coordinates = self.analyzeOneImage(image)
         v_backbone = helpers.genVector2D(coordinates[9][1:], coordinates[5][1:])
