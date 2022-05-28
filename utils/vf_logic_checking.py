@@ -36,7 +36,9 @@ class VirtualFence:
          offset: the offset of virtual fence (pixels)
       Note
       ----------
-         Assume A(x1,y1), B(x2,y2), M(x,y), H is the projection of M with AB line; equation of the AB line has the form :
+         H là hình chiếu của M đến AB được xác định bởi công thức dưới đây:
+         self.AB_module: Khoảng cách của 2 điểm A và B
+         Assume A(x1,y1), B(x2,y2), M(x,y), H is the projection of M with AB line
             MH =  ((x1 - x2)*y - (y1 - y2)*x - (x1*y2 - x2*y1)) / sqrt((x1-x2)^2 + (y1-y2)^2);
             |                    |                                      |---module of AB vec
             |                    |---[cross product of AM vec and AB vec]                                      
@@ -55,9 +57,10 @@ class VirtualFence:
         """Update current state of each track in a deepsort's track list (on which side of the virtual fence?)
       Parameters
       ----------
-         tracks : List[Track]
+         tracks : List[Track] Từng đối tượng track trong frame
             The list of active tracks at the current time step.  
-      """
+        """
+
         for track in tracks:
             bbox = track.to_tlbr()
             xy_center = (int((bbox[0] + bbox[2]) / 2),

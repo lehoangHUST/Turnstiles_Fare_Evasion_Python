@@ -14,6 +14,7 @@ import time
 
 RESOLUTIONS_DICT = {'rt': 224, 'i': 256, 'ii': 368, 'iii': 480, 'iv': 600, 'rt_lite': 224, 'i_lite': 256, 'ii_lite': 368}
 POSE_DICT = {0: 'walking', 1: 'jumping'}
+
 class EfficientPose:
    def __init__(self, folder_path, model_name= "IV"):
       # path to store images (after generating keypoints)
