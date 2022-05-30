@@ -12,6 +12,9 @@ from models.common import DetectMultiBackend
 from utils.general import check_img_size
 
 sys.path.insert(0, "utils/efficient_pose")
+sys.path.insert(0, "utils/deep_sort")
+sys.path.insert(0, "utils")
+sys.path.insert(0, "tracking")
 
 
 def config_Yolov5(yolo_weight, device, imgsz=640):

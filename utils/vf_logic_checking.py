@@ -75,3 +75,5 @@ class VirtualFence:
                 track.current_state = -1
                 continue
             track.current_state = track.pre_state
+
+
