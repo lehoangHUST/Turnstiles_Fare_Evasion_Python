@@ -1,4 +1,4 @@
-from utils import helpers
+import helpers
 
 import numpy as np
 import torch
